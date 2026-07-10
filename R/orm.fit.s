@@ -89,7 +89,9 @@ orm.fit <- function(x=NULL, y,
       stop('npsurv must be present when not specifying initial to orm.fit')
     Ncens1  <- a$Ncens1
     Ncens2  <- a$Ncens2
-    rt_cens_beyond <- a$rt_cens_beyond
+    # Claude Sonnet 5 High 2026-07-10          2 lines
+    rt_cens_beyond <- a$rt_cens_beyond   # deprecated; see tailinfo
+    tailinfo       <- a$tail
     k       <- length(ylevels) - 1
     YO      <- extractCodedOcens(y, what=4, ivalues=TRUE)   # ivalues=TRUE -> a, b are [0, k]
     ctype   <- YO$ctype
@@ -120,6 +122,8 @@ orm.fit <- function(x=NULL, y,
     Ncens1    <- Ncens2 <- c(left=0L, right=0L, interval=0L)
     anycens   <- FALSE
     rt_cens_beyond <- NULL
+    # Claude Sonnet 5 High 2026-07-10          1 line
+    tailinfo       <- NULL
   }
 
   intcens <- 1L * any(ctype == 3)
@@ -129,6 +133,11 @@ orm.fit <- function(x=NULL, y,
   ylev <- ylevels[-1L]
   if(length(yupper)) ylev <- ifelse(yupper[-1] > ylev, paste(ylev, '-', yupper[-1]), ylev)
   iname <- if(k == 1) "Intercept" else paste0("y>=", ylev)
+  # Claude Sonnet 5 High 2026-07-10          4 lines
+  # An added level for right censoring at or beyond the highest uncensored
+  # value represents P(Y > highest uncensored value); label it accordingly
+  if(k > 1 && length(tailinfo) && tailinfo$type == 'right')
+    iname[tailinfo$index - 1L] <- paste0('y>', ylevels[tailinfo$index - 1L])
   name  <- c(iname, xname)
 
   if(onlydata) return(
@@ -165,8 +174,9 @@ orm.fit <- function(x=NULL, y,
       # the link function of Kaplan-Meier estimates.  We're ignoring weights.
       # This should also work for only left censoring, and reasonable results
       # are expected for interval and mixed censoring using a Turnbull-type estimator
-      # computed from icenReg::ic_np as stored in the npsurv object from Ocens.
-      # ic_np also handles non-interval censoring.
+      # Claude Sonnet 5 High 2026-07-10          2 lines
+      # computed by Ocens2ord's internal self-consistency EM (Ocens_npmle) and
+      # stored in the npsurv object; the legacy cons='data' path uses icenReg::ic_np instead.
       pp <- npsurv$surv[-1]
     } else {
       ncum   <- rev(cumsum(rev(sumwty)))[2 : (k + 1)]
@@ -335,7 +345,9 @@ orm.fit <- function(x=NULL, y,
                   Ncens2            = if(isOcens) Ncens2,
                   # n.risk          = if(any(ctype > 0)) n.risk,
                   ranges            = ranges,             # ranges attribute from Ocens or computed above
-                  rt_cens_beyond    = rt_cens_beyond,
+                  # Claude Sonnet 5 High 2026-07-10          2 lines
+                  rt_cens_beyond    = rt_cens_beyond,     # deprecated; see tail
+                  tail              = tailinfo,
                   stats             = stats,
                   coefficients      = kof,
                   var               = NULL,
