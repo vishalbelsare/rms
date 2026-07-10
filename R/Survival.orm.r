@@ -12,7 +12,8 @@ Survival.orm <- function(object, precision = 7, ...) {
 
   f <- function(times = numeric(0), lp = 0, X = numeric(0),
                 intercepts = numeric(0), slopes = numeric(0),
-                info = numeric(0), values = numeric(0), rt_cens_beyond = NULL,
+                # Claude Sonnet 5 High 2026-07-10          1 line
+                info = numeric(0), values = numeric(0), tailinfo = NULL,
                 interceptRef = integer(0), cumprob = cumprob, yname = NULL,
                 ranges,
                 conf.int = 0, parallel = FALSE, forcedf = FALSE, zero = FALSE,
@@ -60,15 +61,13 @@ Survival.orm <- function(object, precision = 7, ...) {
       if (!parallel) times <- sort(unique(times))
     } else {
       times <- values
-      # Remove extra point added to get the right likelihood (parameters) and
-      # add the last right-censored point.  Extra point added when there is at
-      # least one uncensored point at or beyond the highest censored point, and
-      # we want to extend the survival curve out to end of follow-up (last censored pt)
-      if (length(rt_cens_beyond)) {
-        times <- setdiff(times, rt_cens_beyond$newlevel)
-        # if(rt_cens_beyond$range[2] > max(times))
-        #   times <- c(times, rt_cens_beyond$range[2])  # add max uncensored time
-      }
+      # Claude Sonnet 5 High 2026-07-10          6 lines
+      # Remove the level added to capture right censoring at or beyond the
+      # highest uncensored point; it defines the last intercept but is not an
+      # event time.  The survival curve is instead carried forward from the
+      # highest uncensored point to the end of follow-up (below).  Removal is
+      # by stored index, so no floating-point value matching is involved.
+      if (length(tailinfo)) times <- values[- tailinfo$index]
     }
 
     # ints = indexes of intercepts corresponding to requested times, noting that the survival
@@ -124,11 +123,19 @@ Survival.orm <- function(object, precision = 7, ...) {
     max_uncens <- ranges$u[2]
     surv[ts < min_uncens] <- 1.0
     LP <- ifelse(ts < min_uncens, Inf, lpsi)
-    if (length(rt_cens_beyond)) { # rt-censored points at or beyond highest uncensored pt
-      rng <- rt_cens_beyond$range
+    # Claude Sonnet 5 High 2026-07-10          2 lines
+    if (length(tailinfo)) { # rt-censored points at or beyond highest uncensored pt
+      rng <- tailinfo$range
       max_fu <- rng[2]
       surv[ts > max_fu] <- NA
-      LP <- ifelse(ts > rng[1] & ts <= max_fu, lpsi_last, LP)
+      # Claude Sonnet 5 High 2026-07-10          1 line
+      # Bug fix: must compare against max_uncens (the true last event time),
+      # not rng[1] (the minimum trailing censored value).  These coincide
+      # only when the tail level is tied with the last event; otherwise
+      # rng[1] equals the tail level's own value exactly, so ts == rng[1]
+      # was being routed by approx() to the fabricated -Inf intercept
+      # (giving surv=0) before this carry-forward correction could apply.
+      LP <- ifelse(ts > max_uncens & ts <= max_fu, lpsi_last, LP)
       LP[ts > max_fu] <- NA
       surv <- cump(LP)
     } else {
@@ -216,6 +223,17 @@ Survival.orm <- function(object, precision = 7, ...) {
 
   cumprob <- object$famfunctions[1]
 
+  # Claude Sonnet 5 High 2026-07-10          10 lines
+  tl <- object$tail
+  if (!length(tl) && length(object$rt_cens_beyond)) {
+    # Fit from a version that stored only the deprecated rt_cens_beyond
+    rcb <- object$rt_cens_beyond
+    tl <- list(
+      type = "right", index = length(vals),
+      value = rcb$newlevel, tied = NA, range = rcb$range
+    )
+  }
+
   formals(f) <-
     list(
       times = NULL, lp = 0, X = numeric(0),
@@ -223,7 +241,8 @@ Survival.orm <- function(object, precision = 7, ...) {
       slopes = object$coef[-(1:ns)],
       info = object$info.matrix,
       values = vals,
-      rt_cens_beyond = object$rt_cens_beyond,
+      # Claude Sonnet 5 High 2026-07-10          1 line
+      tailinfo = tl,
       interceptRef = object$interceptRef,
       cumprob = cumprob,
       yname = object$yname,
