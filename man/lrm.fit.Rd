@@ -146,7 +146,7 @@ When there is complete separation (Hauck-Donner condition), i.e., the MLE of a c
 # blood.pressure, and sex, assumed to be already properly coded and
 # transformed
 
-fit <- lrm.fit(cbind(age,blood.pressure,sex=='male'), death)
+fit <- lrm.fit(cbind(age, blood.pressure, sex == "male"), death)
 }
 }
 \seealso{

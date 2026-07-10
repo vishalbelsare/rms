@@ -25,10 +25,29 @@ s <- Survival(f)
 s()
 
 nignore <- 0
-set.seed(21)
 pr  <- function(...) {}
-chk <- function(a, b, msg) if(! isTRUE(all.equal(a, b))) stop(msg)
+chk <- function(a, b, msg) if(! isTRUE(all.equal(a, b))) stop(msg, ' i=', i)
 
+# Example from iteration 3 where use of times= gave a different result
+# from survfit:
+
+y <- c(4L, 8L, 6L, 2L, 2L, 4L, 8L, 1L, 2L, 1L, 10L, 9L)
+e <- c(1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1)
+Y    <- Ocens(y, ifelse(e == 1, y, Inf))
+S    <- Surv(y, e)
+f    <- orm.fit(y=Y, family='loglog')
+s    <- Survival(f)
+g    <- survfit(S ~ 1, conf.type='log-log')
+u    <- summary(g)
+ts   <- seq(0, max(y) + 2, by=0.5)
+s1   <- s(times=ts, conf.int=0.95)
+s1   <- s1$surv
+s2   <- summary(g, times=ts, extend=TRUE)$surv
+cbind(ts, s1, s2)
+
+
+set.seed(21)
+bad <- 0
 for(i in 1: 2500) {
   pr('i=', i, '')
   n    <- sample(10:40, 1)
@@ -53,10 +72,11 @@ for(i in 1: 2500) {
   low1 <- s1$lower
   up1  <- s1$upper
   s1   <- s1$surv
-  g   <- survfit(S ~ 1, conf.type='log-log')
-  u   <- summary(g)
-  t2  <- u$time
-  s2  <- u$surv
+  if(i == bad) {prn(S); dput(y); dput(e); prn(cbind(t1, s1, low1, up1))}
+  g    <- survfit(S ~ 1, conf.type='log-log')
+  u    <- summary(g)
+  t2   <- u$time
+  s2   <- u$surv
   low2 <- u$lower
   up2  <- u$upper
   stopifnot(all(is.na(low2) == is.na(up2)))
@@ -75,7 +95,7 @@ for(i in 1: 2500) {
   low1 <- s1$lower
   up1  <- s1$upper
   s1   <- s1$surv
-  s2 <- summary(g, times=ts, extend=TRUE)
+  s2   <- summary(g, times=ts, extend=TRUE)
 
   low2 <- s2$lower
   up2  <- s2$upper
@@ -91,6 +111,7 @@ for(i in 1: 2500) {
     low2[ts > maxc] <- NA
     up2 [ts > maxc] <- NA
   }
+  if(i == bad) prn(cbind(ts, s1, s2))
   chk(s1,     s2, 'unequal survival probs at requested times')
   chk(low1, low2, 'unequal lower CLs at requested times')
   chk(up1,  up2,  'unequal upper CLs at requested times')
