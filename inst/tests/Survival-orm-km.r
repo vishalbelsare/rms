@@ -154,3 +154,24 @@ for (u in y1) {
   prn(S(times=c(0, y)))
   prn(with(survfit(Surv(y) ~ 1), data.frame(time, surv)))
   }
+
+# Modified from Zhihong Yu 2026-07-14
+w <- readRDS('yu.rds')
+target_t <- c(1.05, 2.88, 6.93, 13.86, 23.03)
+for(i in 1:4) {
+  cat('\n\nDataset', i, '\n\n')
+  dat <- w[[i]]
+  km_mdl <- survfit(Surv(time, status) ~ 1, data = dat, conf.type = "log-log")
+  sp_survfit <- summary(km_mdl, times = target_t, data.frame = TRUE, extend=TRUE)
+  cat('KM from survfit\n\n')
+  print(sp_survfit[.q(time, surv, lower, upper)])
+  orm_mdl <- orm(Ocens(time, R) ~ 1, family = "loglog", data = dat)
+  s_fun <- Survival(orm_mdl)
+  sp_orm <- s_fun(times = target_t, conf.int = 0.95)
+  cat('\norm Survival\n\n')
+  print(sp_orm)
+  with(dat,
+    if(status[time == max(time)] == 0)
+      cat('Last observation was censored at', max(time), '; estimates beyond that should be NA\n') )
+}
+
